@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Les Viennoiseries</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+
+<body class="viennoiseries-page">
+    
+
+<header>  
+    <div class="top-bar">
+        <h1>Les Viennoiseries</h1>
+        <a href="index.html">← Retour</a>
+    </div>    
+</header>
+
+
+<section class="add-product">
+
+    <input type="text" id="name" placeholder="Nom">
+    <input type="text" id="price" placeholder="Prix">
+    <input type="text" id="desc" placeholder="Description">
+    <input type="file" id="image">
+    <input type="date" id="expireDate">
+
+    <!-- 👉 ADD THIS HERE -->
+    <select id="category">
+        <option value="pains">Pains</option>
+        <option value="viennoiseries">Viennoiseries</option>
+        <option value="sandwichs">Sandwichs</option>
+        <option value="gateaux">Gâteaux</option>
+        <option value="speciales">Spéciales</option>
+        <option value="formules">Formules</option>
+    </select>
+
+    <button id="addBtn">Add Product</button>
+
+</section>
+
+
+<section class="products">
+
+</section>
+
+<div id="editBox" class="login-box">
+    <div class="login-content">
+        <h2>Edit Product</h2>
+        <button id="closeEdit">X</button>
+
+        <input type="text" id="editName" placeholder="Name">
+        <input type="text" id="editPrice" placeholder="Price">
+        <input type="text" id="editDesc" placeholder="Description">
+
+        <button id="saveEdit">Save</button>
+    </div>
+</div>
+
+</body>
+<script type="module" src="script.js"></script>
+
+</html>
