@@ -1,34 +1,31 @@
 // =====================
-// FIREBASE IMPORTS
+// FIREBASE IMPORT
 // =====================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.0/firebase-app.js";
-import {
-    getFirestore,
-    collection,
-    addDoc,
-    getDocs,
-    deleteDoc,
-    doc,
-    updateDoc
-} from "https://www.gstatic.com/firebasejs/12.2.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { 
+    getFirestore, collection, addDoc, getDocs, deleteDoc, doc 
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // =====================
-// FIREBASE CONFIG (PUT YOURS HERE)
+// FIREBASE CONFIG (PUT YOURS)
 // =====================
 const firebaseConfig = {
-    apiKey: "AIzaSyDs-3awjX2blWcwGTkNMrU_zfNXio4octc",
-    authDomain: "le-pain-boulangerie-7b19e.firebaseapp.com",
-    projectId: "le-pain-boulangerie-7b19e",
-    storageBucket: "le-pain-boulangerie-7b19e.firebasestorage.app",
-    messagingSenderId: "281743981904",
-    appId: "1:281743981904:web:9f9d0d9c9532613b624055"
+    apiKey: "AIzaSyBK-vY3-6JfxBQlKjmJvt5EVyVH14k2-1M",
+    authDomain: "boulangerie-app-eaf44.firebaseapp.com",
+    projectId: "boulangerie-app-eaf44",
+    storageBucket: "boulangerie-app-eaf44.firebasestorage.app",
+    messagingSenderId: "462668655178",
+    appId: "1:462668655178:web:7709105f67964b27fdd4b3"
 };
 
-// =====================
-// INIT FIREBASE
-// =====================
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+// =====================
+// CLOUDINARY CONFIG
+// =====================
+const CLOUD_NAME = "dlvu4e3h1";
+const UPLOAD_PRESET = "unsigned_preset";
 
 // =====================
 // PAGE DETECTION
@@ -39,45 +36,12 @@ const currentPage = window.location.pathname
     .replace(".html", "");
 
 // =====================
-// ADMIN SYSTEM
+// ADMIN
 // =====================
 let isAdmin = localStorage.getItem("isAdmin") === "true";
 
-const loginBox = document.getElementById("loginBox");
-const submitLogin = document.getElementById("submitLogin");
-
-if (submitLogin) {
-    submitLogin.addEventListener("click", () => {
-        const password = document.getElementById("adminPass").value;
-        const ADMIN_PASSWORD = "azer1234";
-
-        if (password === ADMIN_PASSWORD) {
-            localStorage.setItem("isAdmin", "true");
-            alert("Admin connected");
-            location.reload();
-        } else {
-            alert("Wrong password");
-        }
-    });
-}
-
-// SECRET LOGIN
-const logo = document.getElementById("logo");
-let clickCount = 0;
-
-if (logo) {
-    logo.addEventListener("click", () => {
-        clickCount++;
-        if (clickCount === 5) {
-            loginBox.style.display = "flex";
-            clickCount = 0;
-        }
-        setTimeout(() => clickCount = 0, 2000);
-    });
-}
-
 // =====================
-// LOAD & DISPLAY PRODUCTS
+// LOAD PRODUCTS
 // =====================
 const container = document.querySelector(".products");
 
@@ -89,19 +53,11 @@ async function loadProducts() {
 
     const snapshot = await getDocs(collection(db, "products"));
 
-    const today = new Date();
+    snapshot.forEach((docSnap) => {
 
-    snapshot.forEach((docItem) => {
+        const product = docSnap.data();
 
-        const product = docItem.data();
-        const id = docItem.id;
-
-        // FILTER
         if (product.category !== currentPage) return;
-
-        if (product.expireDate) {
-            if (new Date(product.expireDate) < today) return;
-        }
 
         const div = document.createElement("div");
         div.className = "product";
@@ -111,37 +67,14 @@ async function loadProducts() {
             <h2>${product.name}</h2>
             <p>Prix: ${product.price}</p>
             <p>${product.description}</p>
-
-            ${isAdmin && product.expireDate 
-                ? `<p>Expire: ${new Date(product.expireDate).toLocaleDateString()}</p>` 
-                : ""}
-
-            ${isAdmin ? `<button class="edit-btn">Edit</button>` : ""}
             ${isAdmin ? `<button class="delete-btn">Delete</button>` : ""}
         `;
 
         // DELETE
-        const deleteBtn = div.querySelector(".delete-btn");
-        if (deleteBtn) {
-            deleteBtn.addEventListener("click", async () => {
-                if (!confirm("Delete this product?")) return;
-
-                await deleteDoc(doc(db, "products", id));
+        if (isAdmin) {
+            div.querySelector(".delete-btn").addEventListener("click", async () => {
+                await deleteDoc(doc(db, "products", docSnap.id));
                 loadProducts();
-            });
-        }
-
-        // EDIT
-        const editBtn = div.querySelector(".edit-btn");
-        if (editBtn) {
-            editBtn.addEventListener("click", () => {
-                document.getElementById("editName").value = product.name;
-                document.getElementById("editPrice").value = product.price;
-                document.getElementById("editDesc").value = product.description;
-
-                document.getElementById("editBox").style.display = "flex";
-
-                currentEditId = id;
             });
         }
 
@@ -166,117 +99,73 @@ if (addBtn) {
 
     addBtn.addEventListener("click", async () => {
 
-        addBtn.disabled = true; // 🔥 prevent multiple clicks
-
-        const name = document.getElementById("name").value;
-        const price = document.getElementById("price").value;
-        const desc = document.getElementById("desc").value;
+        const name = document.getElementById("name").value.trim();
+        const price = document.getElementById("price").value.trim();
+        const desc = document.getElementById("desc").value.trim();
         const category = document.getElementById("category").value;
+        const file = document.getElementById("image").files[0];
 
-        const expireDateInput = document.getElementById("expireDate");
-        const expireDate = expireDateInput && expireDateInput.value
-            ? expireDateInput.value
-            : null;
-
-        const imageInput = document.getElementById("image");
-        const file = imageInput.files[0];
-
-        if (!file) {
-            alert("Select image");
-            addBtn.disabled = false;
+        if (!name || !price || !desc || !file) {
+            alert("Fill all fields");
             return;
         }
 
-        const reader = new FileReader();
+        try {
+            // =====================
+            // UPLOAD TO CLOUDINARY
+            // =====================
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("upload_preset", UPLOAD_PRESET);
 
-        reader.onload = async function () {
+            const response = await fetch(
+                `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+                {
+                    method: "POST",
+                    body: formData
+                }
+            );
 
-            try {
-                const newProduct = {
-                    name,
-                    price,
-                    description: desc,
-                    image: reader.result,
-                    expireDate,
-                    category
-                };
+            const data = await response.json();
 
-                await addDoc(collection(db, "products"), newProduct);
+            const imageURL = data.secure_url;
 
-                alert("Product added ✅");
+            // =====================
+            // SAVE TO FIRESTORE
+            // =====================
+            await addDoc(collection(db, "products"), {
+                name,
+                price,
+                description: desc,
+                category,
+                image: imageURL
+            });
 
-            } catch (error) {
-                console.error(error);
-                alert("Error ❌");
-            }
+            alert("Product added ✅");
+            location.reload();
 
-            addBtn.disabled = false; // 🔥 re-enable button
-        };
-
-        reader.readAsDataURL(file);
-    });
-
-}
-
-// =====================
-// EDIT SAVE
-// =====================
-let currentEditId = null;
-
-const saveEdit = document.getElementById("saveEdit");
-
-if (saveEdit) {
-    saveEdit.addEventListener("click", async () => {
-
-        if (!currentEditId) return;
-
-        const newName = document.getElementById("editName").value;
-        const newPrice = document.getElementById("editPrice").value;
-        const newDesc = document.getElementById("editDesc").value;
-
-        await updateDoc(doc(db, "products", currentEditId), {
-            name: newName,
-            price: newPrice,
-            description: newDesc
-        });
-
-        location.reload();
+        } catch (error) {
+            console.error(error);
+            alert("Error ❌");
+        }
     });
 }
 
 // =====================
-// CLOSE POPUPS
+// ADMIN LOGIN
 // =====================
-const closeLogin = document.getElementById("closeLogin");
-const closeEdit = document.getElementById("closeEdit");
+const submitLogin = document.getElementById("submitLogin");
 
-if (closeLogin) {
-    closeLogin.addEventListener("click", () => {
-        loginBox.style.display = "none";
+if (submitLogin) {
+    submitLogin.addEventListener("click", () => {
+
+        const password = document.getElementById("adminPass").value;
+
+        if (password === "azer1234") {
+            localStorage.setItem("isAdmin", "true");
+            location.reload();
+        } else {
+            alert("Wrong password");
+        }
     });
-}
-
-if (closeEdit) {
-    closeEdit.addEventListener("click", () => {
-        document.getElementById("editBox").style.display = "none";
-    });
-}
-
-// =====================
-// LOGOUT
-// =====================
-if (isAdmin) {
-    const logoutBtn = document.createElement("button");
-
-    logoutBtn.textContent = "Logout";
-    logoutBtn.style.position = "fixed";
-    logoutBtn.style.top = "10px";
-    logoutBtn.style.right = "10px";
-
-    logoutBtn.addEventListener("click", () => {
-        localStorage.setItem("isAdmin", "false");
-        location.reload();
-    });
-
-    document.body.appendChild(logoutBtn);
 }
