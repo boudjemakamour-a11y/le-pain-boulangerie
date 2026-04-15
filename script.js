@@ -143,72 +143,76 @@ loadProducts();
 // =====================
 // ADD PRODUCT
 // =====================
-addBtn.addEventListener("click", async () => {
+const addBtn = document.getElementById("addBtn");
 
-    if (addBtn.disabled) return;
+if (addBtn) {
 
-    const nameInput = document.getElementById("name");
-    const priceInput = document.getElementById("price");
-    const descInput = document.getElementById("desc");
-    const imageInput = document.getElementById("image");
+    addBtn.addEventListener("click", async () => {
 
-    const name = nameInput.value.trim();
-    const price = priceInput.value.trim();
-    const desc = descInput.value.trim();
-    const category = document.getElementById("category").value;
-    const file = imageInput.files[0];
+        if (addBtn.disabled) return;
 
-    if (!name || !price || !desc || !file) {
-        alert("Fill all fields");
-        return;
-    }
+        const nameInput = document.getElementById("name");
+        const priceInput = document.getElementById("price");
+        const descInput = document.getElementById("desc");
+        const imageInput = document.getElementById("image");
 
-    // 🔒 lock button
-    addBtn.disabled = true;
-    addBtn.textContent = "Uploading...";
+        const name = nameInput.value.trim();
+        const price = priceInput.value.trim();
+        const desc = descInput.value.trim();
+        const category = document.getElementById("category").value;
+        const file = imageInput.files[0];
 
-    try {
-        // 📸 compress image
-        const compressedFile = await compressImage(file);
+        if (!name || !price || !desc || !file) {
+            alert("Fill all fields");
+            return;
+        }
 
-        const formData = new FormData();
-        formData.append("file", compressedFile);
-        formData.append("upload_preset", UPLOAD_PRESET);
+        addBtn.disabled = true;
+        addBtn.textContent = "Uploading...";
 
-        const response = await fetch(
-            `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-            { method: "POST", body: formData }
-        );
+        try {
+            const compressedFile = await compressImage(file);
 
-        const data = await response.json();
-        const imageURL = data.secure_url;
+            const formData = new FormData();
+            formData.append("file", compressedFile);
+            formData.append("upload_preset", UPLOAD_PRESET);
 
-        await addDoc(collection(db, "products"), {
-            name,
-            price,
-            description: desc,
-            category,
-            image: imageURL
-        });
+            const response = await fetch(
+                `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+                { method: "POST", body: formData }
+            );
 
-        // ✅ CLEAR INPUTS (VERY IMPORTANT)
-        nameInput.value = "";
-        priceInput.value = "";
-        descInput.value = "";
-        imageInput.value = "";
+            const data = await response.json();
+            const imageURL = data.secure_url;
 
-        alert("Product added ✅");
+            await addDoc(collection(db, "products"), {
+                name,
+                price,
+                description: desc,
+                category,
+                image: imageURL
+            });
 
-        loadProducts();
+            // clear inputs
+            nameInput.value = "";
+            priceInput.value = "";
+            descInput.value = "";
+            imageInput.value = "";
 
-    } catch (error) {
-        console.error(error);
-        alert("Error ❌");
-    }
+            alert("Product added ✅");
 
-    addBtn.disabled = false;
-    addBtn.textContent = "Add Product";
-});
+            loadProducts();
+
+        } catch (error) {
+            console.error(error);
+            alert("Error ❌");
+        }
+
+        addBtn.disabled = false;
+        addBtn.textContent = "Add Product";
+    });
+
+}
 // =====================
 // ADMIN LOGIN
 // =====================
