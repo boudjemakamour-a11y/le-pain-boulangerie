@@ -1,6 +1,7 @@
 // =====================
 // FIREBASE IMPORT
 // =====================
+import { updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { 
     getFirestore, collection, addDoc, getDocs, deleteDoc, doc 
@@ -26,7 +27,35 @@ const db = getFirestore(app);
 // =====================
 const CLOUD_NAME = "dlvu4e3h1";
 const UPLOAD_PRESET = "unsigned_preset";
+// =====================
+// IMAGE COMPRESSION
+// =====================
+function compressImage(file, maxWidth = 800) {
+    return new Promise((resolve) => {
 
+        const img = new Image();
+        const reader = new FileReader();
+
+        reader.onload = e => img.src = e.target.result;
+
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const scale = maxWidth / img.width;
+
+            canvas.width = maxWidth;
+            canvas.height = img.height * scale;
+
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(blob => {
+                resolve(blob);
+            }, "image/jpeg", 0.7);
+        };
+
+        reader.readAsDataURL(file);
+    });
+}
 // =====================
 // PAGE DETECTION
 // =====================
@@ -39,6 +68,11 @@ const currentPage = window.location.pathname
 // ADMIN
 // =====================
 let isAdmin = localStorage.getItem("isAdmin") === "true";
+const addSection = document.querySelector(".add-product");
+
+if (!isAdmin && addSection) {
+    addSection.style.display = "none";
+}
 
 // =====================
 // LOAD PRODUCTS
@@ -67,8 +101,30 @@ async function loadProducts() {
             <h2>${product.name}</h2>
             <p>Prix: ${product.price}</p>
             <p>${product.description}</p>
-            ${isAdmin ? `<button class="delete-btn">Delete</button>` : ""}
+            ${isAdmin ? `
+                <button class="edit-btn">Edit</button>
+                <button class="delete-btn">Delete</button>
+            ` : ""}
         `;
+        // EDIT
+        if (isAdmin) {
+            div.querySelector(".edit-btn").addEventListener("click", () => {
+
+                const newName = prompt("New name:", product.name);
+                const newPrice = prompt("New price:", product.price);
+                const newDesc = prompt("New description:", product.description);
+
+                if (!newName || !newPrice || !newDesc) return;
+
+                updateDoc(doc(db, "products", docSnap.id), {
+                    name: newName,
+                    price: newPrice,
+                    description: newDesc
+                });
+
+                loadProducts();
+            });
+        }   
 
         // DELETE
         if (isAdmin) {
@@ -87,70 +143,72 @@ loadProducts();
 // =====================
 // ADD PRODUCT
 // =====================
-const addBtn = document.getElementById("addBtn");
+addBtn.addEventListener("click", async () => {
 
-if (addBtn) {
+    if (addBtn.disabled) return;
 
-    const addSection = document.querySelector(".add-product");
+    const nameInput = document.getElementById("name");
+    const priceInput = document.getElementById("price");
+    const descInput = document.getElementById("desc");
+    const imageInput = document.getElementById("image");
 
-    if (!isAdmin && addSection) {
-        addSection.style.display = "none";
+    const name = nameInput.value.trim();
+    const price = priceInput.value.trim();
+    const desc = descInput.value.trim();
+    const category = document.getElementById("category").value;
+    const file = imageInput.files[0];
+
+    if (!name || !price || !desc || !file) {
+        alert("Fill all fields");
+        return;
     }
 
-    addBtn.addEventListener("click", async () => {
+    // 🔒 lock button
+    addBtn.disabled = true;
+    addBtn.textContent = "Uploading...";
 
-        const name = document.getElementById("name").value.trim();
-        const price = document.getElementById("price").value.trim();
-        const desc = document.getElementById("desc").value.trim();
-        const category = document.getElementById("category").value;
-        const file = document.getElementById("image").files[0];
+    try {
+        // 📸 compress image
+        const compressedFile = await compressImage(file);
 
-        if (!name || !price || !desc || !file) {
-            alert("Fill all fields");
-            return;
-        }
+        const formData = new FormData();
+        formData.append("file", compressedFile);
+        formData.append("upload_preset", UPLOAD_PRESET);
 
-        try {
-            // =====================
-            // UPLOAD TO CLOUDINARY
-            // =====================
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("upload_preset", UPLOAD_PRESET);
+        const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+            { method: "POST", body: formData }
+        );
 
-            const response = await fetch(
-                `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-                {
-                    method: "POST",
-                    body: formData
-                }
-            );
+        const data = await response.json();
+        const imageURL = data.secure_url;
 
-            const data = await response.json();
+        await addDoc(collection(db, "products"), {
+            name,
+            price,
+            description: desc,
+            category,
+            image: imageURL
+        });
 
-            const imageURL = data.secure_url;
+        // ✅ CLEAR INPUTS (VERY IMPORTANT)
+        nameInput.value = "";
+        priceInput.value = "";
+        descInput.value = "";
+        imageInput.value = "";
 
-            // =====================
-            // SAVE TO FIRESTORE
-            // =====================
-            await addDoc(collection(db, "products"), {
-                name,
-                price,
-                description: desc,
-                category,
-                image: imageURL
-            });
+        alert("Product added ✅");
 
-            alert("Product added ✅");
-            location.reload();
+        loadProducts();
 
-        } catch (error) {
-            console.error(error);
-            alert("Error ❌");
-        }
-    });
-}
+    } catch (error) {
+        console.error(error);
+        alert("Error ❌");
+    }
 
+    addBtn.disabled = false;
+    addBtn.textContent = "Add Product";
+});
 // =====================
 // ADMIN LOGIN
 // =====================
@@ -161,11 +219,52 @@ if (submitLogin) {
 
         const password = document.getElementById("adminPass").value;
 
-        if (password === "azer1234") {
+        if (password === "boulangerie_admin_2026") {
             localStorage.setItem("isAdmin", "true");
+
+            alert("Admin connected ✅");
+
             location.reload();
         } else {
-            alert("Wrong password");
+            alert("Wrong password ❌");
         }
     });
+}
+// =====================
+// SECRET ADMIN LOGIN (5 CLICKS)
+// =====================
+const logo = document.getElementById("logo");
+const loginBox = document.getElementById("loginBox");
+
+let clickCount = 0;
+
+if (logo) {
+    logo.addEventListener("click", () => {
+        clickCount++;
+
+        if (clickCount === 5) {
+            loginBox.style.display = "flex";
+            clickCount = 0;
+        }
+
+        setTimeout(() => clickCount = 0, 2000);
+    });
+}
+// =====================
+// LOGOUT BUTTON
+// =====================
+if (isAdmin) {
+    const logoutBtn = document.createElement("button");
+
+    logoutBtn.textContent = "Logout";
+    logoutBtn.style.position = "fixed";
+    logoutBtn.style.top = "10px";
+    logoutBtn.style.right = "10px";
+
+    logoutBtn.addEventListener("click", () => {
+        localStorage.setItem("isAdmin", "false");
+        location.reload();
+    });
+
+    document.body.appendChild(logoutBtn);
 }
