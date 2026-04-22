@@ -1,61 +1,50 @@
 // =====================
-// FIREBASE IMPORT
+// FIREBASE IMPORTS
 // =====================
-import { updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { 
-    getFirestore, collection, addDoc, getDocs, deleteDoc, doc 
+
+import {
+    getFirestore,
+    collection,
+    addDoc,
+    getDocs,
+    deleteDoc,
+    doc,
+    updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+
 // =====================
-// FIREBASE CONFIG (PUT YOURS)
+// CONFIG
 // =====================
 const firebaseConfig = {
     apiKey: "AIzaSyBK-vY3-6JfxBQlKjmJvt5EVyVH14k2-1M",
     authDomain: "boulangerie-app-eaf44.firebaseapp.com",
     projectId: "boulangerie-app-eaf44",
-    storageBucket: "boulangerie-app-eaf44.firebasestorage.app",
-    messagingSenderId: "462668655178",
-    appId: "1:462668655178:web:7709105f67964b27fdd4b3"
 };
 
+const ADMIN_EMAIL = "boudjemakamour@gmail.com";
+
+
+// =====================
+// INIT
+// =====================
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
 
-// =====================
-// CLOUDINARY CONFIG
-// =====================
-const CLOUD_NAME = "dlvu4e3h1";
-const UPLOAD_PRESET = "unsigned_preset";
-// =====================
-// IMAGE COMPRESSION
-// =====================
-function compressImage(file, maxWidth = 800) {
-    return new Promise((resolve) => {
+let isAdmin = false;
 
-        const img = new Image();
-        const reader = new FileReader();
 
-        reader.onload = e => img.src = e.target.result;
-
-        img.onload = () => {
-            const canvas = document.createElement("canvas");
-            const scale = maxWidth / img.width;
-
-            canvas.width = maxWidth;
-            canvas.height = img.height * scale;
-
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            canvas.toBlob(blob => {
-                resolve(blob);
-            }, "image/jpeg", 0.7);
-        };
-
-        reader.readAsDataURL(file);
-    });
-}
 // =====================
 // PAGE DETECTION
 // =====================
@@ -64,15 +53,89 @@ const currentPage = window.location.pathname
     .pop()
     .replace(".html", "");
 
-// =====================
-// ADMIN
-// =====================
-let isAdmin = localStorage.getItem("isAdmin") === "true";
-const addSection = document.querySelector(".add-product");
 
-if (!isAdmin && addSection) {
-    addSection.style.display = "none";
+// =====================
+// AUTH STATE
+// =====================
+onAuthStateChanged(auth, (user) => {
+
+    if (user && user.email === ADMIN_EMAIL) {
+        isAdmin = true;
+        console.log("Admin connected");
+    } else {
+        isAdmin = false;
+    }
+
+    setupUI();
+    loadProducts();
+});
+
+
+// =====================
+// LOGIN FUNCTION
+// =====================
+const logo = document.getElementById("logo");
+let clickCount = 0;
+
+if (logo) {
+    logo.addEventListener("click", () => {
+        clickCount++;
+
+        if (clickCount === 5) {
+            loginWithGoogle(); // 👈 THIS is the change
+            clickCount = 0;
+        }
+
+        setTimeout(() => clickCount = 0, 2000);
+    });
 }
+
+
+window.loginWithGoogle = async function () {
+    try {
+        const result = await signInWithPopup(auth, provider);
+        console.log("Logged in:", result.user.email);
+    } catch (err) {
+        console.error(err);
+        alert("Login error");
+    }
+};
+
+
+// =====================
+// LOGOUT
+// =====================
+window.logout = async function () {
+    await signOut(auth);
+};
+
+
+// =====================
+// UI SETUP
+// =====================
+function setupUI() {
+
+    const addSection = document.querySelector(".add-product");
+
+    if (addSection) {
+        addSection.style.display = isAdmin ? "flex" : "none";
+    }
+
+    // Logout button
+    if (isAdmin && !document.getElementById("logoutBtn")) {
+        const btn = document.createElement("button");
+        btn.id = "logoutBtn";
+        btn.textContent = "Logout";
+
+        btn.style.position = "fixed";
+        btn.style.top = "10px";
+        btn.style.right = "10px";
+
+        btn.onclick = logout;
+        document.body.appendChild(btn);
+    }
+}
+
 
 // =====================
 // LOAD PRODUCTS
@@ -101,14 +164,24 @@ async function loadProducts() {
             <h2>${product.name}</h2>
             <p>Prix: ${product.price}</p>
             <p>${product.description}</p>
+
             ${isAdmin ? `
                 <button class="edit-btn">Edit</button>
                 <button class="delete-btn">Delete</button>
             ` : ""}
         `;
+
+        // DELETE
+        if (isAdmin) {
+            div.querySelector(".delete-btn").onclick = async () => {
+                await deleteDoc(doc(db, "products", docSnap.id));
+                loadProducts();
+            };
+        }
+
         // EDIT
         if (isAdmin) {
-            div.querySelector(".edit-btn").addEventListener("click", () => {
+            div.querySelector(".edit-btn").onclick = async () => {
 
                 const newName = prompt("New name:", product.name);
                 const newPrice = prompt("New price:", product.price);
@@ -116,29 +189,20 @@ async function loadProducts() {
 
                 if (!newName || !newPrice || !newDesc) return;
 
-                updateDoc(doc(db, "products", docSnap.id), {
+                await updateDoc(doc(db, "products", docSnap.id), {
                     name: newName,
                     price: newPrice,
                     description: newDesc
                 });
 
                 loadProducts();
-            });
-        }   
-
-        // DELETE
-        if (isAdmin) {
-            div.querySelector(".delete-btn").addEventListener("click", async () => {
-                await deleteDoc(doc(db, "products", docSnap.id));
-                loadProducts();
-            });
+            };
         }
 
         container.appendChild(div);
     });
 }
 
-loadProducts();
 
 // =====================
 // ADD PRODUCT
@@ -146,129 +210,35 @@ loadProducts();
 const addBtn = document.getElementById("addBtn");
 
 if (addBtn) {
-
     addBtn.addEventListener("click", async () => {
 
-        if (addBtn.disabled) return;
-
-        const nameInput = document.getElementById("name");
-        const priceInput = document.getElementById("price");
-        const descInput = document.getElementById("desc");
-        const imageInput = document.getElementById("image");
-
-        const name = nameInput.value.trim();
-        const price = priceInput.value.trim();
-        const desc = descInput.value.trim();
+        const name = document.getElementById("name").value;
+        const price = document.getElementById("price").value;
+        const desc = document.getElementById("desc").value;
         const category = document.getElementById("category").value;
-        const file = imageInput.files[0];
+        const file = document.getElementById("image").files[0];
 
         if (!name || !price || !desc || !file) {
             alert("Fill all fields");
             return;
         }
 
-        addBtn.disabled = true;
-        addBtn.textContent = "Uploading...";
+        // SIMPLE upload (you can re-add Cloudinary later)
+        const reader = new FileReader();
 
-        try {
-            const compressedFile = await compressImage(file);
-
-            const formData = new FormData();
-            formData.append("file", compressedFile);
-            formData.append("upload_preset", UPLOAD_PRESET);
-
-            const response = await fetch(
-                `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-                { method: "POST", body: formData }
-            );
-
-            const data = await response.json();
-            const imageURL = data.secure_url;
+        reader.onload = async function () {
 
             await addDoc(collection(db, "products"), {
                 name,
                 price,
                 description: desc,
                 category,
-                image: imageURL
+                image: reader.result
             });
 
-            // clear inputs
-            nameInput.value = "";
-            priceInput.value = "";
-            descInput.value = "";
-            imageInput.value = "";
-
-            alert("Product added ✅");
-
             loadProducts();
+        };
 
-        } catch (error) {
-            console.error(error);
-            alert("Error ❌");
-        }
-
-        addBtn.disabled = false;
-        addBtn.textContent = "Add Product";
+        reader.readAsDataURL(file);
     });
-
-}
-// =====================
-// ADMIN LOGIN
-// =====================
-const submitLogin = document.getElementById("submitLogin");
-
-if (submitLogin) {
-    submitLogin.addEventListener("click", () => {
-
-        const password = document.getElementById("adminPass").value;
-
-        if (password === "boulangerie_admin_2026") {
-            localStorage.setItem("isAdmin", "true");
-
-            alert("Admin connected ✅");
-
-            location.reload();
-        } else {
-            alert("Wrong password ❌");
-        }
-    });
-}
-// =====================
-// SECRET ADMIN LOGIN (5 CLICKS)
-// =====================
-const logo = document.getElementById("logo");
-const loginBox = document.getElementById("loginBox");
-
-let clickCount = 0;
-
-if (logo) {
-    logo.addEventListener("click", () => {
-        clickCount++;
-
-        if (clickCount === 5) {
-            loginBox.style.display = "flex";
-            clickCount = 0;
-        }
-
-        setTimeout(() => clickCount = 0, 2000);
-    });
-}
-// =====================
-// LOGOUT BUTTON
-// =====================
-if (isAdmin) {
-    const logoutBtn = document.createElement("button");
-
-    logoutBtn.textContent = "Logout";
-    logoutBtn.style.position = "fixed";
-    logoutBtn.style.top = "10px";
-    logoutBtn.style.right = "10px";
-
-    logoutBtn.addEventListener("click", () => {
-        localStorage.setItem("isAdmin", "false");
-        location.reload();
-    });
-
-    document.body.appendChild(logoutBtn);
 }
